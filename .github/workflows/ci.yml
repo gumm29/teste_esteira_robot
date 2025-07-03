@@ -8,37 +8,42 @@ on:
 
 jobs:
   start-emulator:
-    runs-on: macos-14  # ARM-based runner
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      ANDROID_HOME: /usr/local/lib/android/sdk
 
     steps:
-      - name: Configurar variáveis do SDK
+      - name: Instalar dependências do AVD
         run: |
-          echo "ANDROID_HOME=$HOME/Library/Android/sdk" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$HOME/Library/Android/sdk" >> $GITHUB_ENV
-          echo "$HOME/Library/Android/sdk/platform-tools" >> $GITHUB_PATH
-          echo "$HOME/Library/Android/sdk/emulator" >> $GITHUB_PATH
-          echo "$HOME/Library/Android/sdk/tools" >> $GITHUB_PATH
-          echo "$HOME/Library/Android/sdk/tools/bin" >> $GITHUB_PATH
+          sudo apt-get update
+          sudo apt-get install -y qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils mesa-utils
 
-      - name: Instalar system image ARM64
+      - name: Instalar system image
         run: |
-          yes | sdkmanager --licenses
-          sdkmanager --install "system-images;android-30;google_apis;arm64-v8a"
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            "system-images;android-30;google_apis;x86_64" \
+            "platform-tools" \
+            "emulator"
 
       - name: Criar AVD
         run: |
-          echo "no" | avdmanager create avd -n test \
-            -k "system-images;android-30;google_apis;arm64-v8a" \
+          echo "no" | $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd \
+            -n test -k "system-images;android-30;google_apis;x86_64" \
             --device "pixel"
 
-      - name: Iniciar emulador (modo software)
+      - name: Iniciar emulador Android (modo software)
         run: |
           $ANDROID_HOME/emulator/emulator -avd test \
             -no-audio -no-window -gpu swiftshader_indirect \
-            -no-snapshot -no-boot-anim -verbose \
+            -no-boot-anim -no-snapshot \
             -qemu -accel tcg &
-          adb wait-for-device
-          adb shell input keyevent 82
+
+          echo "Aguardando o emulador inicializar..."
+          $ANDROID_HOME/platform-tools/adb wait-for-device
+          $ANDROID_HOME/platform-tools/adb shell input keyevent 82
+
 
       - name: Tirar screenshot
         run: adb exec-out screencap -p > screenshot.png
