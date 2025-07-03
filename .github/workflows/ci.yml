@@ -11,8 +11,8 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      ANDROID_HOME: ${{ runner.temp }}/android-sdk
       ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
+      ANDROID_HOME: ${{ runner.temp }}/android-sdk
       PATH: ${{ runner.temp }}/android-sdk/cmdline-tools/latest/bin:${{ runner.temp }}/android-sdk/emulator:${{ runner.temp }}/android-sdk/platform-tools:${{ env.PATH }}
 
     steps:
@@ -35,7 +35,6 @@ jobs:
           mkdir -p $ANDROID_HOME/cmdline-tools
           cd $ANDROID_HOME
           if [ ! -d "$ANDROID_HOME/cmdline-tools/latest" ]; then
-            # Install cmdline-tools if not present
             wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
             unzip cmdline-tools.zip
             mkdir -p cmdline-tools/latest
@@ -44,7 +43,6 @@ jobs:
 
           yes | sdkmanager --sdk_root=$ANDROID_HOME --licenses
 
-          # Check if system image installed
           if [ ! -d "$ANDROID_HOME/system-images/android-34/google_apis/arm64-v8a" ]; then
             sdkmanager --sdk_root=$ANDROID_HOME \
               "platform-tools" \
@@ -57,9 +55,6 @@ jobs:
 
       - name: Create AVD Pixel 2 API 34 (arm64-v8a)
         run: |
-          export ANDROID_HOME=$ANDROID_HOME
-          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH
-
           AVD_NAME="Pixel_2_API_34"
           AVD_PATH="$HOME/.android/avd/${AVD_NAME}.avd"
           CONFIG_FILE="$AVD_PATH/config.ini"
@@ -81,9 +76,6 @@ jobs:
 
       - name: Start emulator and wait for boot
         run: |
-          export ANDROID_HOME=$ANDROID_HOME
-          export PATH=$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH
-
           adb kill-server || true
           adb start-server
 
@@ -102,18 +94,4 @@ jobs:
 
           RETRIES=0
           until adb shell service check input | grep -q "found"; do
-            echo "Input service not available yet..."
-            sleep 2
-            RETRIES=$((RETRIES + 1))
-            if [ $RETRIES -gt 30 ]; then
-              echo "Timeout waiting for input service"
-              exit 1
-            fi
-          done
-
-          adb shell input keyevent 82
-
-      - name: Verify emulator is running
-        run: |
-          adb devices
-          adb shell getprop ro.build.version.release
+            echo "In
