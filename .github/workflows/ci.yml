@@ -1,7 +1,10 @@
 name: Emulador Android
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   start-emulator:
@@ -36,8 +39,6 @@ jobs:
             -qemu -accel tcg &
           adb wait-for-device
           adb shell input keyevent 82
-
-
 
       - name: Tirar screenshot
         run: adb exec-out screencap -p > screenshot.png
