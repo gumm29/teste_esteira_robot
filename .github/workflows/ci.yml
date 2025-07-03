@@ -10,51 +10,35 @@ jobs:
   start-emulator:
     runs-on: ubuntu-latest
     env:
-      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-      ANDROID_HOME: /usr/local/lib/android/sdk
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+  ANDROID_AVD_HOME: $HOME/.android/avd  # importante!
 
-    steps:
-      - name: Instalar dependências do AVD
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils mesa-utils
+steps:
+  - name: Criar AVD
+    run: |
+      mkdir -p $ANDROID_AVD_HOME
+      echo "no" | $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd -n test -k "system-images;android-30;google_apis;x86_64" --device "pixel"
 
-      - name: Instalar system image
-        run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-            "system-images;android-30;google_apis;x86_64" \
-            "platform-tools" \
-            "emulator"
+  - name: Listar AVDs para debug
+    run: $ANDROID_HOME/emulator/emulator -list-avds
 
-      - name: Criar AVD
-        run: |
-          echo "no" | $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd \
-            -n test -k "system-images;android-30;google_apis;x86_64" \
-            --device "pixel"
+  - name: Iniciar emulador
+    run: |
+      $ANDROID_HOME/emulator/emulator -avd test -no-audio -no-window -gpu swiftshader_indirect -no-boot-anim -qemu -accel tcg &
+      $ANDROID_HOME/platform-tools/adb wait-for-device
+      $ANDROID_HOME/platform-tools/adb shell input keyevent 82
 
-      - name: Iniciar emulador Android (modo software)
-        run: |
-          $ANDROID_HOME/emulator/emulator -avd test \
-            -no-audio -no-window -gpu swiftshader_indirect \
-            -no-boot-anim -no-snapshot \
-            -qemu -accel tcg &
+  - name: Tirar screenshot
+    run: adb exec-out screencap -p > screenshot.png
 
-          echo "Aguardando o emulador inicializar..."
-          $ANDROID_HOME/platform-tools/adb wait-for-device
-          $ANDROID_HOME/platform-tools/adb shell input keyevent 82
+  - name: Upload screenshot
+    uses: actions/upload-artifact@v4
+    with:
+      name: emulator-screenshot
+      path: screenshot.png
 
-
-      - name: Tirar screenshot
-        run: adb exec-out screencap -p > screenshot.png
-
-      - name: Upload screenshot
-        uses: actions/upload-artifact@v4
-        with:
-          name: emulator-screenshot
-          path: screenshot.png
-
-      - name: Keep Alive
-        run: |
-          echo "Emulador rodando por 5 minutos..."
-          sleep 300
+  - name: Keep Alive
+    run: |
+      echo "Emulador rodando por 5 minutos..."
+      sleep 300
