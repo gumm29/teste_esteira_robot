@@ -1,38 +1,27 @@
-name: Android Emulator Test
+name: Start Android Emulator
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:  # dispara manualmente no GitHub
 
 jobs:
-  android-emulator:
-    name: Run Android Emulator
-    runs-on: macos-latest  # precisa de runner com suporte a Android
+  start-emulator:
+    runs-on: macos-latest  # o emulador só roda no macOS no GitHub Actions
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Set up JDK
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Build Debug APK and Test APK
-        run: ./gradlew assembleDebug assembleAndroidTest
-
+      - name: Create AVD
+        run: |
+          echo "no" | avdmanager create avd -n test -k "system-images;android-30;google_apis;x86" --device "pixel"
+          
       - name: Start Emulator
         run: |
-          echo "no" | avdmanager create avd -n test -k "system-images;android-30;google_apis;x86"
           $ANDROID_HOME/emulator/emulator -avd test -no-audio -no-window -gpu swiftshader_indirect &
           adb wait-for-device
-          adb shell input keyevent 82 &
-
-      - name: Run Instrumentation Tests
-        run: ./gradlew connectedAndroidTest
+          adb shell input keyevent 82  # desbloqueia a tela
+          
+      - name: Keep alive
+        run: |
+          echo "Emulador iniciado! Mantendo processo ativo por 5 minutos..."
+          sleep 300
