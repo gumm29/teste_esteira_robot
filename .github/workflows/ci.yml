@@ -10,9 +10,9 @@ jobs:
   start-emulator:
     runs-on: ubuntu-latest
     env:
-  ANDROID_HOME: /usr/local/lib/android/sdk
-  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-  ANDROID_AVD_HOME: $HOME/.android/avd  # importante!
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      ANDROID_AVD_HOME: $HOME/.android/avd  # importante!
 
 steps:
   - name: Criar AVD
