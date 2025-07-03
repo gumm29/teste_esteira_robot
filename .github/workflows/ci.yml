@@ -1,0 +1,38 @@
+name: Android Emulator Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  android-emulator:
+    name: Run Android Emulator
+    runs-on: macos-latest  # precisa de runner com suporte a Android
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build Debug APK and Test APK
+        run: ./gradlew assembleDebug assembleAndroidTest
+
+      - name: Start Emulator
+        run: |
+          echo "no" | avdmanager create avd -n test -k "system-images;android-30;google_apis;x86"
+          $ANDROID_HOME/emulator/emulator -avd test -no-audio -no-window -gpu swiftshader_indirect &
+          adb wait-for-device
+          adb shell input keyevent 82 &
+
+      - name: Run Instrumentation Tests
+        run: ./gradlew connectedAndroidTest
