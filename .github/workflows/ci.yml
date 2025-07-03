@@ -1,7 +1,8 @@
 name: Start Android Emulator
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
 
 jobs:
   start-emulator:
@@ -25,6 +26,15 @@ jobs:
           $ANDROID_HOME/emulator/emulator -avd test -no-audio -no-window -gpu swiftshader_indirect &
           adb wait-for-device
           adb shell input keyevent 82
+
+      - name: Tirar screenshot
+        run: adb exec-out screencap -p > screenshot.png
+
+      - name: Upload screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-screenshot
+          path: screenshot.png
 
       - name: Keep Alive
         run: |
