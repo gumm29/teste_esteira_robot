@@ -13,9 +13,9 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install system image
-      run: |
-        yes | sdkmanager --install "system-images;android-30;google_apis;arm64-v8a"
-        sdkmanager --licenses
+        run: |
+          yes | sdkmanager --install "system-images;android-30;google_apis;arm64-v8a"
+          sdkmanager --licenses
 
       - name: Create AVD
         run: |
