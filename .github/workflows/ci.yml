@@ -1,66 +1,119 @@
-name: Emulador Android
+name: Android Emulator Setup
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    branches: [main]
 
 jobs:
-  run-emulator:
+  android-emulator:
     runs-on: ubuntu-latest
 
     env:
-      ANDROID_HOME: /usr/local/lib/android/sdk
-      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-      ANDROID_AVD_HOME: $HOME/.android/avd
-      PATH: $ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH
-
+      ANDROID_HOME: ${{ runner.temp }}/android-sdk
+      ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
+      PATH: ${{ runner.temp }}/android-sdk/cmdline-tools/latest/bin:${{ runner.temp }}/android-sdk/emulator:${{ runner.temp }}/android-sdk/platform-tools:${{ env.PATH }}
 
     steps:
-      - name: Setup packages (qemu, etc)
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js 20.x
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Clear npm cache
+        run: npm cache clean --force
+
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: Install Android SDK packages if missing
         run: |
-          sudo apt-get update
-          sudo apt-get install -y qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils mesa-utils
+          mkdir -p $ANDROID_HOME/cmdline-tools
+          cd $ANDROID_HOME
+          if [ ! -d "$ANDROID_HOME/cmdline-tools/latest" ]; then
+            # Install cmdline-tools if not present
+            wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
+            unzip cmdline-tools.zip
+            mkdir -p cmdline-tools/latest
+            mv cmdline-tools/* cmdline-tools/latest/
+          fi
 
-      - name: Accept licenses and install system images
+          yes | sdkmanager --sdk_root=$ANDROID_HOME --licenses
+
+          # Check if system image installed
+          if [ ! -d "$ANDROID_HOME/system-images/android-34/google_apis/arm64-v8a" ]; then
+            sdkmanager --sdk_root=$ANDROID_HOME \
+              "platform-tools" \
+              "platforms;android-34" \
+              "system-images;android-34;google_apis;arm64-v8a" \
+              "emulator"
+          else
+            echo "ARM64 system image already installed. Skipping."
+          fi
+
+      - name: Create AVD Pixel 2 API 34 (arm64-v8a)
         run: |
-          yes | sdkmanager --licenses
-          sdkmanager "platform-tools" "emulator" "system-images;android-30;google_apis;x86_64"
+          export ANDROID_HOME=$ANDROID_HOME
+          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH
 
-      - name: Create AVD
+          AVD_NAME="Pixel_2_API_34"
+          AVD_PATH="$HOME/.android/avd/${AVD_NAME}.avd"
+          CONFIG_FILE="$AVD_PATH/config.ini"
+
+          if [ -d "$AVD_PATH" ]; then
+            echo "AVD exists. Verifying CPU architecture..."
+            CPU_ARCH=$(grep 'image.sysdir.1' "$CONFIG_FILE" | grep -o 'arm64-v8a' || echo "")
+            if [ "$CPU_ARCH" != "arm64-v8a" ]; then
+              echo "AVD is not using arm64-v8a. Deleting and recreating..."
+              avdmanager delete avd -n "$AVD_NAME"
+              echo "no" | avdmanager create avd -n "$AVD_NAME" -k "system-images;android-34;google_apis;arm64-v8a" --device "pixel_2" --force
+            else
+              echo "AVD is using arm64-v8a. No need to recreate."
+            fi
+          else
+            echo "AVD does not exist. Creating with arm64-v8a..."
+            echo "no" | avdmanager create avd -n "$AVD_NAME" -k "system-images;android-34;google_apis;arm64-v8a" --device "pixel_2" --force
+          fi
+
+      - name: Start emulator and wait for boot
         run: |
-          mkdir -p $ANDROID_AVD_HOME
-          echo "no" | avdmanager create avd -n test -k "system-images;android-30;google_apis;x86_64" --device "pixel"
+          export ANDROID_HOME=$ANDROID_HOME
+          export PATH=$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH
 
-      - name: Check AVD files
-        run: |
-          ls -l $ANDROID_AVD_HOME
-          cat $ANDROID_AVD_HOME/test.ini
+          adb kill-server || true
+          adb start-server
 
-      - name: List AVDs
-        run: emulator -list-avds
+          nohup emulator -avd Pixel_2_API_34 -no-audio -no-window -no-snapshot -gpu host -verbose &
 
-      - name: Start emulator
-        run: |
-          emulator -avd test -no-audio -no-window -gpu swiftshader_indirect -no-boot-anim -qemu -accel tcg &
-
-          echo "Esperando o emulador iniciar..."
           adb wait-for-device
+
+          BOOT_STATUS=""
+          RETRIES=0
+          while [ "$BOOT_STATUS" != "1" ] && [ $RETRIES -lt 30 ]; do
+            BOOT_STATUS=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+            echo "Boot status: $BOOT_STATUS"
+            sleep 2
+            RETRIES=$((RETRIES + 1))
+          done
+
+          RETRIES=0
+          until adb shell service check input | grep -q "found"; do
+            echo "Input service not available yet..."
+            sleep 2
+            RETRIES=$((RETRIES + 1))
+            if [ $RETRIES -gt 30 ]; then
+              echo "Timeout waiting for input service"
+              exit 1
+            fi
+          done
+
           adb shell input keyevent 82
 
-      - name: Check emulator status
-        run: adb devices
-      - name: Tirar screenshot
-        run: adb exec-out screencap -p > screenshot.png
-
-      - name: Upload screenshot
-        uses: actions/upload-artifact@v4
-        with:
-          name: emulator-screenshot
-          path: screenshot.png
-
-      - name: Keep Alive
+      - name: Verify emulator is running
         run: |
-          echo "Emulador rodando por 5 minutos..."
-          sleep 300
+          adb devices
+          adb shell getprop ro.build.version.release
